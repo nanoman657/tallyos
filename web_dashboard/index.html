@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fresh & Focused Barbershop | Rigorous Digital Twin Simulation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- HEADER -->
+        <header class="glass-header">
+            <div class="logo-section">
+                <div class="badge-icon">✂️</div>
+                <div>
+                    <h1>FRESH & FOCUSED <span class="accent-text">DIGITAL TWIN</span></h1>
+                    <p class="subtitle">Suite 236 • 2401 N. Shepherd Dr, Houston Heights 77008 • Stochastic System Dynamics Engine</p>
+                </div>
+            </div>
+            <div class="status-pill">
+                <span class="pulse-dot"></span>
+                <span>BOOKSY API / CALENDAR SYNC READY</span>
+            </div>
+        </header>
+
+        <!-- MAIN LAYOUT -->
+        <main class="dashboard-grid">
+            <!-- LEFT COLUMN: CONTROLS & LEVERS -->
+            <aside class="control-panel glass-card">
+                <div class="panel-header">
+                    <h2>📍 Geographic Market Calibration</h2>
+                    <p>Select Will's shop location to simulate regional economics</p>
+                </div>
+                <div class="lever-group">
+                    <select id="market-select" class="market-dropdown">
+                        <option value="heights">Houston Heights, TX (77008) - $1,750 Rent / 0% Tax</option>
+                        <option value="cypress">Cypress, TX (Suburban) - $1,400 Rent / 0% Tax</option>
+                        <option value="philly">Philadelphia, PA (Urban East Coast) - $2,166 Rent / 6.82% Tax</option>
+                    </select>
+                </div>
+
+                <hr class="divider">
+
+                <div class="panel-header">
+                    <h2>🎛️ Marketing Levers & Actuators</h2>
+                    <p>Adjust parameters or enable Autonomous AI Loop</p>
+                </div>
+
+                <div class="ai-toggle-box">
+                    <div class="toggle-label">
+                        <span class="ai-icon">🤖</span>
+                        <div>
+                            <strong>Autonomous AI Control Loop</strong>
+                            <small>Predictive Booksy density & Houston weather sensing</small>
+                        </div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="ai-loop-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+
+                <hr class="divider">
+
+                <div class="lever-group">
+                    <label for="lever-sms">
+                        <span>1. Day-28 SMS Retargeting (Booksy Link)</span>
+                        <span class="value-display" id="val-sms">0%</span>
+                    </label>
+                    <input type="range" id="lever-sms" min="0" max="100" value="0" step="5">
+                    <small class="hint">Intercepts 28-day churn clock via automated SMS reminders.</small>
+                </div>
+
+                <div class="lever-group">
+                    <label for="lever-discount">
+                        <span>2. Mid-Week WFH Discount ($ Off)</span>
+                        <span class="value-display" id="val-discount">$0</span>
+                    </label>
+                    <input type="range" id="lever-discount" min="0" max="15" value="0" step="1">
+                    <small class="hint">Shifts weekend bottleneck demand to Tues/Wed afternoons.</small>
+                </div>
+
+                <div class="lever-group">
+                    <label for="lever-bundle">
+                        <span>3. Executive Bundle Upsell Conversion</span>
+                        <span class="value-display" id="val-bundle">0%</span>
+                    </label>
+                    <input type="range" id="lever-bundle" min="0" max="60" value="0" step="5">
+                    <small class="hint">Converts $45 cut into $75 Executive Bundle (Cut + Beard + Scalp).</small>
+                </div>
+
+                <div class="lever-group">
+                    <label for="lever-ads">
+                        <span>4. H-E-B Geo-Targeted Ad Spend / Day</span>
+                        <span class="value-display" id="val-ads">$0</span>
+                    </label>
+                    <input type="range" id="lever-ads" min="0" max="50" value="0" step="5">
+                    <small class="hint">Targets 1.5-mile radius around Heights H-E-B across Shepherd Dr.</small>
+                </div>
+
+                <hr class="divider">
+
+                <div class="panel-header">
+                    <h2>⛈️ Houston Heights Environment</h2>
+                </div>
+
+                <div class="env-toggles">
+                    <label class="env-checkbox">
+                        <input type="checkbox" id="env-summer" checked>
+                        <span>☀️ Summer Humidity (+20% Beard Trim Demand)</span>
+                    </label>
+                    <label class="env-checkbox">
+                        <input type="checkbox" id="env-storms" checked>
+                        <span>🌧️ Storm Shocks (-30% Walk-in penalty on rainy days)</span>
+                    </label>
+                    <label class="env-checkbox">
+                        <input type="checkbox" id="env-heb" checked>
+                        <span>🛒 H-E-B Weekend & Tuesday Grocery Foot Traffic</span>
+                    </label>
+                </div>
+
+                <button class="run-btn" id="run-sim-btn">
+                    <span>⚡ RUN 365-DAY STOCHASTIC SIMULATION</span>
+                </button>
+            </aside>
+
+            <!-- RIGHT COLUMN: RESULTS & VISUALIZATIONS -->
+            <section class="results-section">
+                <!-- TOP KPI CARDS -->
+                <div class="kpi-grid">
+                    <div class="kpi-card glass-card border-accent-emerald">
+                        <span class="kpi-label">⭐ Spendable Take-Home Pay (after Taxes & Fees)</span>
+                        <div class="kpi-value" id="kpi-profit">$61,905</div>
+                        <span class="kpi-diff positive" id="kpi-profit-diff">Baseline Institutional Operations</span>
+                    </div>
+                    <div class="kpi-card glass-card border-accent-blue">
+                        <span class="kpi-label">Gross Service Revenue</span>
+                        <div class="kpi-value" id="kpi-revenue">$100,875</div>
+                        <span class="kpi-sub">Commission Split: <strong id="kpi-barbers">100% (Solo Owner)</strong></span>
+                    </div>
+                    <div class="kpi-card glass-card border-accent-purple">
+                        <span class="kpi-label">Average Order Value (AOV)</span>
+                        <div class="kpi-value" id="kpi-aov">$45.00</div>
+                        <span class="kpi-sub">Executive Bundles: <strong id="kpi-bundles-cnt">0</strong></span>
+                    </div>
+                    <div class="kpi-card glass-card border-accent-orange">
+                        <span class="kpi-label">Chair Utilization & Churn</span>
+                        <div class="kpi-value" id="kpi-util">53.4%</div>
+                        <span class="kpi-sub">Regulars Churned: <strong id="kpi-churn" class="warn-text">72</strong></span>
+                    </div>
+                </div>
+
+                <!-- CHARTS -->
+                <div class="chart-container glass-card">
+                    <div class="chart-header">
+                        <h3>📈 Spendable Cash Take-Home Pay ($) (After FICA SE Tax, CC Fees & COGS)</h3>
+                        <div class="chart-legend-custom">
+                            <span class="legend-item"><span class="dot emerald"></span> Current Strategy</span>
+                            <span class="legend-item"><span class="dot red"></span> Baseline Benchmark</span>
+                        </div>
+                    </div>
+                    <canvas id="profitChart"></canvas>
+                </div>
+
+                <div class="chart-container glass-card">
+                    <div class="chart-header">
+                        <h3>💺 Chair Utilization Curve (30-Day Rolling Avg %)</h3>
+                        <span class="hint">Optimal zone: 65% - 85% (Above 90% causes walk-in turnaways)</span>
+                    </div>
+                    <canvas id="utilChart"></canvas>
+                </div>
+
+                <!-- DETAILED BREAKDOWN TABLE -->
+                <div class="table-container glass-card">
+                    <h3>📑 Annual Unit Economics Breakdown (Suite 236)</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Financial / Operational Metric</th>
+                                <th>Scenario 1 (Baseline)</th>
+                                <th>Current Simulated Strategy</th>
+                                <th>Variance / Impact</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Gross Service Revenue</td>
+                                <td>$100,875.00</td>
+                                <td id="tbl-rev">$100,875.00</td>
+                                <td id="tbl-rev-diff" class="neutral">$0.00</td>
+                            </tr>
+                            <tr>
+                                <td>Barber Commission Split (100% to Will)</td>
+                                <td>$0.00 (No Split)</td>
+                                <td id="tbl-barb">$0.00 (No Split)</td>
+                                <td id="tbl-barb-diff" class="neutral">$0.00</td>
+                            </tr>
+                            <tr>
+                                <td id="tbl-overhead-label">Fixed Suite 236 Overhead (Rent + Utilities)</td>
+                                <td>-$22,285.71</td>
+                                <td id="tbl-overhead-val">-$22,285.71</td>
+                                <td class="neutral">$0.00</td>
+                            </tr>
+                            <tr>
+                                <td>Marketing & Ad Spend</td>
+                                <td>-$0.00</td>
+                                <td id="tbl-ads">-$0.00</td>
+                                <td id="tbl-ads-diff" class="neutral">$0.00</td>
+                            </tr>
+                            <tr class="highlight-row">
+                                <td><strong>⭐ TRUE SPENDABLE TAKE-HOME (After FICA SE Tax, CC Fees & COGS)</strong></td>
+                                <td><strong>$61,905.08</strong></td>
+                                <td id="tbl-prof"><strong>$61,905.08</strong></td>
+                                <td id="tbl-prof-diff" class="neutral"><strong>+$0.00</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Ending Active Client Base</td>
+                                <td>108 clients</td>
+                                <td id="tbl-clients">108 clients</td>
+                                <td id="tbl-clients-diff" class="neutral">0</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

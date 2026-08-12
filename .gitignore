@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Unrelated to the Fresh & Focused barbershop digital twin project
+# (other personal/work content that happens to live in this same directory)
+drive_download/
+droplet_console/
+wedding_table_assignments.csv
+wedding_table_assignments_by_table.csv
