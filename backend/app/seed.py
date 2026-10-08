@@ -13,7 +13,7 @@ import numpy as np
 
 from . import erp
 from .ads.simulated import FIRST_NAMES, LAST_NAMES, SimulatedGoogleAds
-from .config import Settings
+from .config import Settings, shop_today
 from .db import Db
 from .growth.loop import run_cycle
 from .growth.signups import record_signup
@@ -104,7 +104,7 @@ def _close_day(db: Db, rng, day: date, profiles: dict) -> None:
 
 
 def seed(db: Db, settings: Settings, today: date = None, seed: int = 11) -> dict:
-    today = today or date.today()
+    today = today or shop_today()
     rng = np.random.default_rng(seed)
     seed_catalog(db)
     platform = SimulatedGoogleAds(db, seed=seed)

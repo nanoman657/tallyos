@@ -34,7 +34,7 @@ from typing import Any, Iterable, List, Optional
 from zoneinfo import ZoneInfo
 
 from . import erp
-from .config import Settings
+from .config import Settings, shop_now, shop_today
 from .db import Db
 
 SOURCE = "booksy"
@@ -266,7 +266,7 @@ def upsert_appointment(db: Db, a: BooksyAppointment) -> str:
         result = "updated" if changed else "unchanged"
     else:
         appt = db.insert("appointments", {**fields, "external_source": SOURCE, "external_id": a.external_id,
-                                          "created_at": a.created_at or datetime.now()})
+                                          "created_at": a.created_at or shop_now()})
         result = "created"
 
     # Finished in Booksy and not checked out here -> book the revenue so finance stays complete.
@@ -427,7 +427,7 @@ def import_csv(db: Db, text: str, tz: ZoneInfo) -> dict:
             ext_id = get("id") or "csv-" + hashlib.sha1(
                 f"{start.isoformat()}|{get('client').lower()}|{get('service').lower()}".encode()).hexdigest()[:16]
             raw = {"id": ext_id, "booked_from": start.isoformat(), "booked_till": end.isoformat() if end else None,
-                   "status": get("status") or ("finished" if start < datetime.now() else "accepted"),
+                   "status": get("status") or ("finished" if start < shop_now() else "accepted"),
                    "checked_in_at": (a.isoformat() if (a := at_day(get("arrived"))) else None),
                    "total_price": get("price") or None,
                    "customer": {"name": get("client"), "phone": get("phone") or None, "email": get("email") or None},
@@ -465,7 +465,7 @@ def sync_booksy_if_configured(db: Db, settings: Settings) -> Optional[dict]:
         api = BooksyApi(settings)
     except BooksyError:
         return None
-    today = date.today()
+    today = shop_today()
     try:
         return sync(db, api, ZoneInfo(settings.shop_timezone), today - timedelta(days=settings.booksy.sync_days_back),
                     today + timedelta(days=settings.booksy.sync_days_ahead))

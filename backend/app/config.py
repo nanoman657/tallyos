@@ -5,7 +5,9 @@ local demo (simulated Google Ads) or against a real Google Ads account.
 
 import os
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from functools import lru_cache
+from zoneinfo import ZoneInfo
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -85,3 +87,13 @@ class Settings:
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def shop_now() -> datetime:
+    """Shop-local wall-clock time. Everything in the database is stored in shop-local time,
+    so never use the server clock (often UTC) directly."""
+    return datetime.now(ZoneInfo(get_settings().shop_timezone)).replace(tzinfo=None)
+
+
+def shop_today() -> date:
+    return shop_now().date()

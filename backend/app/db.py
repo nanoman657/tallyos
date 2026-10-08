@@ -68,7 +68,9 @@ def _adapt(value: Any) -> Any:
 
 
 def connect(database_url: Optional[str] = None) -> psycopg.Connection:
-    conn = psycopg.connect(database_url or get_settings().database_url, row_factory=dict_row)
+    # Session time zone = shop time zone, so now() / TIMESTAMP defaults are shop-local like the rest of the data.
+    conn = psycopg.connect(database_url or get_settings().database_url, row_factory=dict_row,
+                           options=f"-c TimeZone={get_settings().shop_timezone}")
     conn.adapters.register_loader("numeric", FloatLoader)
     return conn
 

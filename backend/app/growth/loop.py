@@ -13,7 +13,7 @@ from datetime import date, datetime, time
 from typing import Optional
 
 from ..ads.base import AdsPlatform
-from ..config import Settings
+from ..config import Settings, shop_today
 from ..db import Db
 from . import act, think
 from .forecast import backtest, build_forecast
@@ -22,7 +22,7 @@ from .sense import sense
 
 def run_cycle(db: Db, platform: AdsPlatform, settings: Settings, as_of: Optional[date] = None,
               dry_run: bool = False) -> dict:
-    as_of = as_of or date.today()
+    as_of = as_of or shop_today()
     cfg = settings.growth
     if hasattr(platform, "set_today"):
         platform.set_today(as_of)

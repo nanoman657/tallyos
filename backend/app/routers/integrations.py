@@ -1,7 +1,7 @@
 """Booksy integration endpoints plus arrival check-in and the punctuality report."""
 
 import hmac
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from .. import booksy, punctuality
-from ..config import get_settings
+from ..config import get_settings, shop_today
 from ..db import Db, get_db
 
 router = APIRouter(prefix="/api")
@@ -39,7 +39,7 @@ def booksy_sync(days_back: Optional[int] = None, days_ahead: Optional[int] = Non
         raise HTTPException(400, "Booksy API isn't configured on the server. Use CSV import, or set BOOKSY_API_URL, "
                                  "BOOKSY_API_TOKEN and BOOKSY_BUSINESS_ID.")
     cfg = get_settings().booksy
-    today = date.today()
+    today = shop_today()
     try:
         return booksy.sync(db, api, _tz(), today - timedelta(days=days_back or cfg.sync_days_back),
                            today + timedelta(days=days_ahead or cfg.sync_days_ahead))
@@ -88,5 +88,5 @@ def check_in(appointment_id: int, body: CheckInIn, db: Db = Depends(get_db)):
 
 @router.get("/punctuality")
 def punctuality_report(days: int = 28, db: Db = Depends(get_db)):
-    today = date.today()
+    today = shop_today()
     return punctuality.shop_report(db, today - timedelta(days=days), today + timedelta(days=1))

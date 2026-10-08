@@ -11,13 +11,15 @@ from typing import Optional
 
 from .db import Db
 from .erp import ErpError
+from .config import shop_now
 
 LATE_GRACE_MIN = 5
 CHRONIC_MIN_VISITS = 3          # need this many tracked arrivals before labelling someone
 CHRONIC_LATE_SHARE = 0.5        # late to at least half of them
 
-# minutes late, floored at 0 (early arrivals don't earn credit)
-LATE_SQL = "greatest(0, extract(epoch FROM (a.arrived_at - a.start_at)) / 60.0)"
+# Minutes late, floored at 0 (early arrivals don't earn credit) and capped at the appointment length:
+# a client can't cost more chair time than their slot, and it keeps a mistaken late tap from skewing averages.
+LATE_SQL = "least(a.duration_min, greatest(0, extract(epoch FROM (a.arrived_at - a.start_at)) / 60.0))"
 
 
 def check_in(db: Db, appointment_id: int, at: Optional[datetime] = None) -> dict:
@@ -26,7 +28,7 @@ def check_in(db: Db, appointment_id: int, at: Optional[datetime] = None) -> dict
         raise ErpError("Unknown appointment")
     if appt["status"] in ("cancelled", "no_show"):
         raise ErpError(f"Appointment is {appt['status']}")
-    appt = db.update("appointments", appointment_id, {"arrived_at": at or datetime.now()})
+    appt = db.update("appointments", appointment_id, {"arrived_at": at or shop_now()})
     appt["minutes_late"] = minutes_late(appt)
     return appt
 
@@ -34,7 +36,8 @@ def check_in(db: Db, appointment_id: int, at: Optional[datetime] = None) -> dict
 def minutes_late(appt: dict) -> Optional[int]:
     if not appt.get("arrived_at"):
         return None
-    return max(0, round((appt["arrived_at"] - appt["start_at"]).total_seconds() / 60))
+    late = max(0, round((appt["arrived_at"] - appt["start_at"]).total_seconds() / 60))
+    return min(late, appt["duration_min"]) if appt.get("duration_min") else late
 
 
 def client_punctuality(db: Db, client_id: int) -> dict:

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from .. import erp
 from ..ads import get_platform
-from ..config import get_settings
+from ..config import get_settings, shop_today
 from ..db import Db, get_db
 from ..growth import act
 from ..growth.forecast import backtest, build_forecast
@@ -22,10 +22,10 @@ router = APIRouter(prefix="/api")
 
 @router.get("/growth/forecast")
 def forecast(days: int = 14, as_of: Optional[date] = None, db: Db = Depends(get_db)):
-    fc = build_forecast(db, as_of or date.today(), days, include_clients=True)
+    fc = build_forecast(db, as_of or shop_today(), days, include_clients=True)
     out = asdict(fc)
     out["clients"] = out["clients"][:40]
-    out["backtest"] = backtest(db, as_of or date.today(), days)
+    out["backtest"] = backtest(db, as_of or shop_today(), days)
     return out
 
 
@@ -52,7 +52,7 @@ def get_run(run_id: int, db: Db = Depends(get_db)):
 
 @router.get("/growth/campaigns")
 def campaigns(days: int = 28, db: Db = Depends(get_db)):
-    today = date.today()
+    today = shop_today()
     stats = {s["campaign_id"]: s for s in campaign_stats(db, today - timedelta(days=days), today + timedelta(days=1))}
     rows = db.all("SELECT * FROM ad_campaigns ORDER BY status = 'ENABLED' DESC, id DESC")
     for r in rows:
@@ -93,7 +93,7 @@ def change_campaign(campaign_id: int, body: CampaignChange, db: Db = Depends(get
         changes["status"] = body.status
     if body.managed_by_loop is not None:
         changes["managed_by_loop"] = body.managed_by_loop
-    return db.update("ad_campaigns", campaign_id, {**changes, "updated_at": date.today()}) if changes else c
+    return db.update("ad_campaigns", campaign_id, {**changes, "updated_at": shop_today()}) if changes else c
 
 
 @router.get("/growth/signups")
@@ -102,12 +102,12 @@ def list_signups(days: int = 28, db: Db = Depends(get_db)):
         """SELECT s.*, c.name AS campaign_name, a.start_at AS first_appointment_at
            FROM signups s LEFT JOIN ad_campaigns c ON c.id = s.campaign_id
            LEFT JOIN appointments a ON a.id = s.first_appointment_id
-           WHERE s.at >= %s ORDER BY s.at DESC""", [date.today() - timedelta(days=days)])
+           WHERE s.at >= %s ORDER BY s.at DESC""", [shop_today() - timedelta(days=days)])
 
 
 @router.get("/growth/signups/summary")
 def signups_summary(days: int = 28, db: Db = Depends(get_db)):
-    today = date.today()
+    today = shop_today()
     return signup_summary(db, today - timedelta(days=days), today + timedelta(days=1))
 
 

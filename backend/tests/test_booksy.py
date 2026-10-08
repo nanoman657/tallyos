@@ -192,3 +192,25 @@ def test_cannot_check_in_cancelled_appointment(db):
                                    "duration_min": 40, "price": 38, "status": "cancelled"})
     with pytest.raises(ErpError):
         punctuality.check_in(db, a["id"])
+
+
+def test_check_in_and_db_defaults_use_shop_local_time(db):
+    """Regression: the server clock is often UTC, but appointments are stored in shop-local time."""
+    from app.config import shop_now
+    cl = db.insert("clients", {"name": "Now"})
+    start = shop_now().replace(second=0, microsecond=0) - timedelta(minutes=12)
+    a = db.insert("appointments", {"client_id": cl["id"], "staff_id": 1, "service_id": 1, "start_at": start,
+                                   "duration_min": 40, "price": 38, "status": "booked"})
+    assert abs((a["created_at"] - shop_now()).total_seconds()) < 60          # Postgres now() default is shop-local
+    late = punctuality.check_in(db, a["id"])["minutes_late"]
+    assert 11 <= late <= 13
+
+
+def test_lateness_is_capped_at_the_appointment_length(db):
+    cl = db.insert("clients", {"name": "Typo"})
+    start = datetime(2026, 10, 13, 9)
+    a = db.insert("appointments", {"client_id": cl["id"], "staff_id": 1, "service_id": 1, "start_at": start,
+                                   "duration_min": 40, "price": 38, "status": "completed"})
+    assert punctuality.check_in(db, a["id"], start + timedelta(hours=13))["minutes_late"] == 40
+    r = punctuality.shop_report(db, date(2026, 10, 1), date(2026, 10, 31))
+    assert r["chair_minutes_lost_to_lateness"] == 40

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from .. import erp, punctuality
 from ..db import Db, get_db
 from ..growth.forecast import build_forecast
+from ..config import shop_now, shop_today
 
 router = APIRouter(prefix="/api")
 
@@ -142,7 +143,7 @@ def client_detail(client_id: int, db: Db = Depends(get_db)):
         """SELECT a.*, s.name AS service_name, st.name AS staff_name FROM appointments a
            JOIN services s ON s.id = a.service_id JOIN staff st ON st.id = a.staff_id
            WHERE a.client_id = %s ORDER BY a.start_at DESC""", [client_id])
-    fc = build_forecast(db, date.today(), 30, include_clients=True)
+    fc = build_forecast(db, shop_today(), 30, include_clients=True)
     client["outlook"] = next((o for o in fc.clients if o.client_id == client_id), None)
     client["punctuality"] = punctuality.client_punctuality(db, client_id)
     return client
@@ -173,7 +174,8 @@ def list_appointments(start: date, end: Optional[date] = None, db: Db = Depends(
         """SELECT a.*, c.name AS client_name, c.phone AS client_phone, c.source AS client_source,
                   s.name AS service_name, st.name AS staff_name,
                   CASE WHEN a.arrived_at IS NOT NULL
-                       THEN greatest(0, round(extract(epoch FROM (a.arrived_at - a.start_at)) / 60))::int END AS minutes_late
+                       THEN least(a.duration_min, greatest(0, round(extract(epoch FROM (a.arrived_at - a.start_at)) / 60)))::int
+                  END AS minutes_late
            FROM appointments a JOIN clients c ON c.id = a.client_id
            JOIN services s ON s.id = a.service_id JOIN staff st ON st.id = a.staff_id
            WHERE a.start_at >= %s AND a.start_at < %s ORDER BY a.start_at""", [start, end])
@@ -192,7 +194,7 @@ def create_appointment(body: AppointmentIn, db: Db = Depends(get_db)):
 @router.post("/appointments/{appointment_id}/checkout")
 def checkout(appointment_id: int, body: CheckoutIn, db: Db = Depends(get_db)):
     return erp.complete_appointment(db, appointment_id, body.tip, body.payment_method, body.products,
-                                    sold_at=datetime.now())
+                                    sold_at=shop_now())
 
 
 @router.post("/appointments/{appointment_id}/status")
@@ -286,7 +288,7 @@ def finance(start: date, end: date, db: Db = Depends(get_db)):
 
 @router.get("/dashboard")
 def dashboard(db: Db = Depends(get_db)):
-    today = date.today()
+    today = shop_today()
     shop = erp.get_shop(db)
     todays = list_appointments(today, None, db)
     sales = db.one("SELECT coalesce(sum(subtotal),0) AS revenue, coalesce(sum(tip),0) AS tips, count(*) AS tickets "

@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import Optional
 
 from ..db import Db
+from ..config import shop_now
 
 
 def _match_campaign(db: Db, gclid: Optional[str], utm_source: Optional[str],
@@ -57,7 +58,7 @@ def record_signup(db: Db, *, name: str, phone: Optional[str] = None, email: Opti
                   gclid: Optional[str] = None, utm_source: Optional[str] = None,
                   utm_medium: Optional[str] = None, utm_campaign: Optional[str] = None,
                   at: Optional[datetime] = None) -> dict:
-    at = at or datetime.now()
+    at = at or shop_now()
     campaign_id, attribution = _match_campaign(db, gclid, utm_source, utm_campaign)
     from_ads = attribution in ("gclid", "utm", "gclid_pending")
     client = _find_or_create_client(db, name, phone, email, at,
