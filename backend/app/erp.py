@@ -188,7 +188,8 @@ def record_sale(db: Db, *, client_id: Optional[int], staff_id: Optional[int], it
         priced.append({"kind": item["kind"], "ref_id": item["ref_id"], "qty": qty, "unit_price": price, "unit_cost": cost})
         subtotal += price * qty
         cogs += cost * qty
-    card_fee = round((subtotal + tip) * shop["card_fee_rate"], 2) if payment_method == "card" else 0.0
+    # Booksy-paid appointments are card payments processed by Booksy, so they carry the card fee too.
+    card_fee = round((subtotal + tip) * shop["card_fee_rate"], 2) if payment_method in ("card", "booksy") else 0.0
     sale = {
         "appointment_id": appointment_id, "client_id": client_id, "staff_id": staff_id,
         "subtotal": round(subtotal, 2), "tip": round(tip, 2), "card_fee": card_fee,

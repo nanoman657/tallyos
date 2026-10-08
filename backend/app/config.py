@@ -41,6 +41,24 @@ class GrowthConfig:
 
 
 @dataclass
+class BooksySettings:
+    """Booksy partner API. Paths/params are configurable because the partner docs aren't public -- confirm them."""
+    api_url: str = field(default_factory=lambda: os.environ.get("BOOKSY_API_URL", ""))
+    api_token: str = field(default_factory=lambda: os.environ.get("BOOKSY_API_TOKEN", ""))
+    business_id: str = field(default_factory=lambda: os.environ.get("BOOKSY_BUSINESS_ID", ""))
+    webhook_secret: str = field(default_factory=lambda: os.environ.get("BOOKSY_WEBHOOK_SECRET", ""))
+    accept_header: str = field(default_factory=lambda: os.environ.get("BOOKSY_ACCEPT", "application/json"))
+    appointments_path: str = field(default_factory=lambda: os.environ.get(
+        "BOOKSY_APPOINTMENTS_PATH", "/businesses/{business_id}/appointments"))
+    appointment_path: str = field(default_factory=lambda: os.environ.get(
+        "BOOKSY_APPOINTMENT_PATH", "/businesses/{business_id}/appointments/{appointment_id}"))
+    param_from: str = field(default_factory=lambda: os.environ.get("BOOKSY_PARAM_FROM", "date_from"))
+    param_till: str = field(default_factory=lambda: os.environ.get("BOOKSY_PARAM_TILL", "date_till"))
+    sync_days_back: int = 30
+    sync_days_ahead: int = 30
+
+
+@dataclass
 class Settings:
     database_url: str = field(default_factory=lambda: os.environ.get(
         "DATABASE_URL", "postgresql://tallyos:tallyos@localhost:5432/tallyos"))
@@ -59,7 +77,9 @@ class Settings:
     frontend_dir: str = field(default_factory=lambda: os.environ.get(
         "TALLYOS_FRONTEND_DIR",
         os.path.join(os.path.dirname(__file__), "..", "..", "frontend")))
+    shop_timezone: str = field(default_factory=lambda: os.environ.get("TALLYOS_TIMEZONE", "America/Chicago"))
     growth: GrowthConfig = field(default_factory=GrowthConfig)
+    booksy: BooksySettings = field(default_factory=BooksySettings)
 
 
 @lru_cache
