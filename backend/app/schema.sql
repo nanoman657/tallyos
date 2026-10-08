@@ -185,3 +185,36 @@ CREATE TABLE IF NOT EXISTS forecasts (
     gap_slots         NUMERIC(8,2) NOT NULL,
     PRIMARY KEY (run_id, date)
 );
+
+-- ------------------------------------------------------------ external booking systems (Booksy)
+-- ALTERs keep existing databases upgradeable in place (init_schema runs on every start).
+ALTER TABLE clients      ADD COLUMN IF NOT EXISTS external_source TEXT;
+ALTER TABLE clients      ADD COLUMN IF NOT EXISTS external_id TEXT;
+ALTER TABLE staff        ADD COLUMN IF NOT EXISTS external_id TEXT;
+ALTER TABLE services     ADD COLUMN IF NOT EXISTS external_id TEXT;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS external_source TEXT;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS external_id TEXT;
+-- When the client actually walked in (Booksy check-in, CSV column, or the "Arrived" button).
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS arrived_at TIMESTAMP;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_clients_external ON clients(external_source, external_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_appt_external ON appointments(external_source, external_id);
+
+-- Raw log of everything received from Booksy (webhooks, API pulls, CSV rows) for audit/replay.
+CREATE TABLE IF NOT EXISTS integration_events (
+    id          SERIAL PRIMARY KEY,
+    source      TEXT NOT NULL,                 -- booksy
+    kind        TEXT NOT NULL,                 -- webhook | api_sync | csv_import
+    action      TEXT,                          -- created | modified | cancelled | upsert
+    external_id TEXT,
+    received_at TIMESTAMP NOT NULL DEFAULT now(),
+    payload     JSONB NOT NULL DEFAULT '{}',
+    result      TEXT,                          -- created | updated | skipped | error
+    error       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_integration_events_at ON integration_events(received_at);
+
+CREATE TABLE IF NOT EXISTS integration_state (
+    source TEXT PRIMARY KEY,
+    last_sync_at TIMESTAMP,
+    last_sync_summary JSONB NOT NULL DEFAULT '{}'
+);
