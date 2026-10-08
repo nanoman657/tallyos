@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Book your cut</title>
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <main class="join">
+    <div class="hero"><img src="icons/icon.svg" alt=""><h1 id="shop">Book your cut</h1><p class="muted" id="addr"></p></div>
+
+    <section class="card step active" id="step-1">
+      <h2>New here? Grab a spot</h2>
+      <form id="signup">
+        <label class="field"><span>Your name</span><input name="name" required autocomplete="name"></label>
+        <label class="field"><span>Mobile number</span><input name="phone" inputmode="tel" autocomplete="tel" required></label>
+        <label class="field"><span>Email (optional)</span><input name="email" type="email" autocomplete="email"></label>
+        <button class="btn primary" style="width:100%">Continue</button>
+      </form>
+    </section>
+
+    <section class="card step" id="step-2">
+      <h2>Pick a service and time</h2>
+      <label class="field"><span>Service</span><select id="svc"></select></label>
+      <label class="field"><span>Day</span><input type="date" id="day"></label>
+      <div class="slots" id="slots"></div>
+      <button class="btn primary" style="width:100%;margin-top:14px" id="book" disabled>Book it</button>
+    </section>
+
+    <section class="card step" id="step-3">
+      <h2>You're booked</h2>
+      <p id="done"></p>
+      <p class="muted small">We'll text you a reminder. See you in the chair.</p>
+    </section>
+  </main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/join.js"></script>
+</body>
+</html>
