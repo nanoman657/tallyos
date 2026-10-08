@@ -65,6 +65,8 @@ def _profile(rng) -> dict:
         "mu": float(np.clip(rng.normal(27, 5), 14, 45)), "sd": float(rng.uniform(2.5, 6)),
         "prefs": prefs, "service": int(rng.choice([1, 2, 3, 4, 5], p=[0.42, 0.25, 0.2, 0.08, 0.05])),
         "lapse_on": None,
+        # Typical arrival offset in minutes vs. the booked time; ~1 in 6 clients runs habitually late.
+        "late_mu": float(rng.uniform(8, 18)) if rng.random() < 0.17 else float(rng.uniform(-4, 2)),
     }
 
 
@@ -77,12 +79,15 @@ def _try_book(db: Db, client_id: int, prof: dict, want: date, created: datetime)
     return slot["start_at"].date()
 
 
-def _close_day(db: Db, rng, day: date) -> None:
+def _close_day(db: Db, rng, day: date, profiles: dict) -> None:
     """Check out (or no-show) every appointment that started on `day`."""
-    for appt in db.all("SELECT id FROM appointments WHERE status = 'booked' AND start_at::date = %s", [day]):
+    for appt in db.all("SELECT id, client_id, start_at FROM appointments WHERE status = 'booked' AND start_at::date = %s", [day]):
         if rng.random() < 0.03:
             db.update("appointments", appt["id"], {"status": "no_show"})
             continue
+        late_mu = profiles.get(appt["client_id"], {}).get("late_mu", 0.0)
+        offset = max(-10.0, rng.normal(late_mu, 4.0))
+        db.update("appointments", appt["id"], {"arrived_at": appt["start_at"] + timedelta(minutes=round(offset))})
         products = [{"product_id": 1 if rng.random() < 0.6 else 2, "qty": 1}] if rng.random() < 0.08 else []
         for p in products:
             if db.scalar("SELECT on_hand FROM products WHERE id = %s", [p["product_id"]]) < 1:
@@ -118,7 +123,7 @@ def seed(db: Db, settings: Settings, today: date = None, seed: int = 11) -> dict
     runs = 0
     for offset in range(HISTORY_DAYS + 1):
         day = start + timedelta(days=offset)
-        _close_day(db, rng, day - timedelta(days=1))
+        _close_day(db, rng, day - timedelta(days=1), profiles)
 
         # Ad-driven clients who came back become regulars too.
         for row in db.all("SELECT id FROM clients WHERE source = 'google_ads' AND NOT (id = ANY(%s))", [list(profiles)]):
@@ -164,6 +169,11 @@ def seed(db: Db, settings: Settings, today: date = None, seed: int = 11) -> dict
             run_cycle(db, platform, settings, as_of=day)
             runs += 1
 
+    # Online bookings in this demo shop come through Booksy (walk-ins are entered in TallyOS directly).
+    db.execute("""UPDATE appointments a SET external_source = 'booksy', external_id = 'demo-' || a.id
+                  FROM clients c WHERE c.id = a.client_id AND c.source <> 'walk_in'""")
+    db.execute("UPDATE sales SET payment_method = 'booksy' WHERE appointment_id IN "
+               "(SELECT id FROM appointments WHERE external_source = 'booksy') AND payment_method = 'card'")
     return {
         "clients": db.scalar("SELECT count(*) FROM clients"),
         "appointments": db.scalar("SELECT count(*) FROM appointments"),
