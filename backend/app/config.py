@@ -55,7 +55,7 @@ class Settings:
     shop_latitude: float = field(default_factory=lambda: _env_float("TALLYOS_SHOP_LAT", 29.8105))
     shop_longitude: float = field(default_factory=lambda: _env_float("TALLYOS_SHOP_LNG", -95.3980))
     ad_radius_miles: float = field(default_factory=lambda: _env_float("TALLYOS_AD_RADIUS_MILES", 3.0))
-    booking_url: str = field(default_factory=lambda: os.environ.get("TALLYOS_BOOKING_URL", "http://localhost:8000/#/join"))
+    booking_url: str = field(default_factory=lambda: os.environ.get("TALLYOS_BOOKING_URL", "http://localhost:8000/join.html"))
     frontend_dir: str = field(default_factory=lambda: os.environ.get(
         "TALLYOS_FRONTEND_DIR",
         os.path.join(os.path.dirname(__file__), "..", "..", "frontend")))
