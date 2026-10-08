@@ -102,11 +102,52 @@ gap weekdays, phrase-match local keywords, and a responsive search ad built from
 service menu. It has not been exercised against a real account in this repo; try it
 on a test account first.
 
+## Booksy: what people booked, and whether they came in late
+
+TallyOS mirrors your Booksy bookings, so the forecast, the growth loop and the
+reports use what clients actually booked. It records no-shows, cancellations and
+arrival times, and turns them into a punctuality report.
+
+There are three ways to bring bookings in. All of them update existing bookings
+instead of creating duplicates:
+
+| Way | When to use it | How |
+|---|---|---|
+| CSV import | Works today, no special access | Export appointments from Booksy Biz → More → Booksy → pick the file (or `python -m app.cli import-booksy export.csv`) |
+| Partner API sync | Once Booksy grants partner API access | Set `BOOKSY_API_URL`, `BOOKSY_API_TOKEN`, `BOOKSY_BUSINESS_ID`, then use "Sync now", `python -m app.cli sync-booksy`, or `TALLYOS_LOOP_HOURS` (syncs before every loop run) |
+| Webhooks | Live updates once Booksy enables them for you | Set `BOOKSY_WEBHOOK_SECRET` and give Booksy `https://<your-host>/api/integrations/booksy/webhook?secret=<it>`. Notifications are re-fetched from the API when credentials exist |
+
+**Lateness** compares arrival time to booked start. Arrival time comes from Booksy's
+check-in time (from the API or a CSV "Check-in time" column), or from the **Arrived**
+button on Today. A visit counts as late after a 5-minute grace period, and lateness
+per visit is capped at the appointment length. You get:
+- on-time share, average lateness and chair hours lost
+- no-shows and no-show rate
+- late share by weekday
+- habitual latecomers, with a one-tap reminder text
+- "often late" flags on client profiles
+
+**Matching:**
+- Booksy clients are matched to existing TallyOS clients by Booksy id, then phone, then email. So a person who signed up from a Google Ad and then booked on Booksy still counts as a conversion for that campaign.
+- Services and barbers are matched by Booksy id, then by name.
+- Bookings finished in Booksy become sales, so finance stays complete.
+- Checking a client out in TallyOS is never undone by a stale Booksy status.
+- Every webhook, sync and CSV row is logged under More → Booksy → Recent activity.
+
+> **Caveat:** Booksy's partner API is invite-only and its docs aren't public. The
+> endpoint paths (`BOOKSY_APPOINTMENTS_PATH`, `BOOKSY_APPOINTMENT_PATH`, `BOOKSY_PARAM_FROM/TILL`)
+> and the JSON field names (`FIELD_PATHS` and `STATUS_MAP` in `backend/app/booksy.py`) are
+> tolerant best guesses. Check them against the partner docs or a real payload
+> (Recent activity stores it) and adjust them; nothing else needs to change.
+> The CSV importer recognises common column names and reports which ones it matched.
+
+All timestamps are shop-local. Set `TALLYOS_TIMEZONE` (default `America/Chicago`).
+
 ## ERP features
 
-- **Today:** bookings, sales, month-to-date profit, sign-ups, one-tap checkout (tip presets, card/cash, retail add-ons), this week's forecast, low stock.
+- **Today:** bookings, sales, month-to-date profit, sign-ups, an **Arrived** check-in, one-tap checkout (tip presets, card/cash, retail add-ons), this week's forecast, punctuality, low stock.
 - **Schedule:** day strip, conflict-checked booking with live availability, check out / no-show / cancel.
-- **Clients:** search, profile with visit history, source/campaign, and predicted next visit ("due", "overdue", "lapsed").
+- **Clients:** search, profile with visit history, source/campaign, predicted next visit ("due", "overdue", "lapsed"), and punctuality.
 - **Inventory:** retail and back-bar stock. Selling or using items decrements stock, and reorder points are flagged.
 - **Finance:** P&L (card fees, supplies, commissions, rent, ad spend) and a federal / SE / state tax waterfall with take-home.
 - **Menu & staff, Settings:** services, durations, commissions, hours, rent, tax settings, theme.
