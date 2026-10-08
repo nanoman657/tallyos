@@ -458,3 +458,17 @@ def status(db: Db, settings: Settings) -> dict:
                                    FROM integration_events WHERE source = %s ORDER BY id DESC LIMIT 20""", [SOURCE]),
     }
 
+
+def sync_booksy_if_configured(db: Db, settings: Settings) -> Optional[dict]:
+    """Default-window sync when API credentials exist; a no-op otherwise. Never raises (logs instead)."""
+    try:
+        api = BooksyApi(settings)
+    except BooksyError:
+        return None
+    today = date.today()
+    try:
+        return sync(db, api, ZoneInfo(settings.shop_timezone), today - timedelta(days=settings.booksy.sync_days_back),
+                    today + timedelta(days=settings.booksy.sync_days_ahead))
+    except Exception as exc:
+        _log(db, "api_sync", "sync", None, {}, "error", f"{type(exc).__name__}: {exc}")
+        return {"error": str(exc)}

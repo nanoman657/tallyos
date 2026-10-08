@@ -3,8 +3,9 @@ FastAPI application: JSON API under /api, the mobile web app (PWA) at /.
 
     uvicorn app.main:app --reload
 
-Set TALLYOS_LOOP_HOURS=24 to have the server run the sense-think-act cycle
-on its own every N hours (or call `python -m app.cli run-loop` from cron).
+Set TALLYOS_LOOP_HOURS=24 to have the server sync Booksy and run the
+sense-think-act cycle on its own every N hours (or call
+`python -m app.cli sync-booksy` and `python -m app.cli run-loop` from cron).
 """
 
 import asyncio
@@ -22,8 +23,10 @@ from .config import get_settings
 from .db import connect, init_schema, session
 from .erp import ErpError
 from .growth.loop import run_cycle
+from .booksy import sync_booksy_if_configured
 from .routers import erp as erp_routes
 from .routers import growth as growth_routes
+from .routers import integrations as integration_routes
 
 log = logging.getLogger("tallyos")
 
@@ -34,6 +37,8 @@ async def _loop_scheduler(hours: float) -> None:
         try:
             settings = get_settings()
             with session() as db:
+                # Pull the latest Booksy bookings first so the forecast sees them.
+                await asyncio.to_thread(sync_booksy_if_configured, db, settings)
                 result = await asyncio.to_thread(run_cycle, db, get_platform(db, settings), settings)
             log.info("growth loop run %s: %s", result["run_id"], [d["action"] for d in result["think"]["decisions"]])
         except Exception:
@@ -57,6 +62,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="TallyOS", version="0.1.0", lifespan=lifespan)
 app.include_router(erp_routes.router)
 app.include_router(growth_routes.router)
+app.include_router(integration_routes.router)
 
 
 @app.exception_handler(ErpError)
