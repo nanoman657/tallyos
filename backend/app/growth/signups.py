@@ -85,10 +85,12 @@ def reattribute_pending(db: Db) -> int:
 def link_first_appointments(db: Db) -> int:
     """A sign-up 'converts' when that client books their first appointment after signing up."""
     return db.execute(
-        """UPDATE signups s SET first_appointment_id = a.id
-           FROM LATERAL (
-               SELECT id FROM appointments
-               WHERE client_id = s.client_id AND created_at >= s.at - interval '1 hour'
-                 AND status IN ('booked','completed')
-               ORDER BY created_at LIMIT 1) a
-           WHERE s.first_appointment_id IS NULL AND s.client_id IS NOT NULL""")
+        """UPDATE signups s SET first_appointment_id = (
+               SELECT a.id FROM appointments a
+               WHERE a.client_id = s.client_id AND a.created_at >= s.at - interval '1 hour'
+                 AND a.status IN ('booked','completed')
+               ORDER BY a.created_at LIMIT 1)
+           WHERE s.first_appointment_id IS NULL AND s.client_id IS NOT NULL
+             AND EXISTS (SELECT 1 FROM appointments a
+                         WHERE a.client_id = s.client_id AND a.created_at >= s.at - interval '1 hour'
+                           AND a.status IN ('booked','completed'))""")
