@@ -9,3 +9,9 @@ drive_download/
 droplet_console/
 wedding_table_assignments.csv
 wedding_table_assignments_by_table.csv
+
+# TallyOS app
+.pytest_cache/
+*.db
+.env
+google-ads.yaml

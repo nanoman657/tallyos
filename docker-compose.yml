@@ -1,0 +1,28 @@
+# Local stack: PostgreSQL + the TallyOS API (which also serves the mobile web app).
+#   docker compose up --build
+#   docker compose exec api python -m app.cli seed --reset   # demo data
+#   open http://localhost:8000
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: tallyos
+      POSTGRES_PASSWORD: tallyos
+      POSTGRES_DB: tallyos
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tallyos"]
+      interval: 3s
+      retries: 20
+  api:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    environment:
+      DATABASE_URL: postgresql://tallyos:tallyos@db:5432/tallyos
+      TALLYOS_ADS_BACKEND: ${TALLYOS_ADS_BACKEND:-simulated}
+      TALLYOS_LOOP_HOURS: ${TALLYOS_LOOP_HOURS:-24}
+      TALLYOS_BOOKING_URL: ${TALLYOS_BOOKING_URL:-http://localhost:8000/join.html}
+    ports: ["8000:8000"]
+    depends_on:
+      db: { condition: service_healthy }
+volumes:
+  pgdata:
