@@ -11,7 +11,9 @@ THINK, part 2: turn the booking forecast + ad results into campaign decisions.
    posterior (prior + observed attributed sign-ups), sign-up->booking rate
    from observed first appointments. CPA = CPC / (cvr x booking rate).
    An optimistic CPA (90th-percentile cvr) is used for "is this campaign
-   hopeless?" so a campaign isn't killed by a few unlucky days.
+   hopeless?" so a campaign isn't killed by a few unlucky days. With no
+   judged campaign yet, the optimistic prior CPA is used so the loop explores
+   (capped at half the guardrail budget) instead of never trying.
 
 3. Gap -- open chair slots the forecast says won't fill on their own:
    gap(d) = max(0, target_utilization x capacity(d) - expected(d)).
@@ -41,6 +43,7 @@ WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 GAP_WEEKDAY_THRESHOLD = 0.10       # a weekday "has a gap" if >10% of its target slots are unfilled
 GAP_WEEKDAY_KEEP_THRESHOLD = 0.05  # hysteresis: a day already in the ad schedule stays until <5%
 NEW_CLIENT_RETURN_PRIOR = 0.5
+EXPLORE_BUDGET_SHARE = 0.5         # while exploring, spend at most half the guardrail budget
 NEW_CLIENT_RETURN_PRIOR_WEIGHT = 10.0
 
 
@@ -51,6 +54,13 @@ class Decision:
     campaign_id: Optional[int] = None
     daily_budget: Optional[float] = None
     target_weekdays: Optional[List[int]] = None
+
+
+def optimistic_prior_cpa(cfg: GrowthConfig) -> float:
+    """CPA at the 90th-percentile click->sign-up rate of the prior (no campaign data yet)."""
+    rng = np.random.default_rng(7)
+    cvr_p90 = float(np.quantile(rng.beta(cfg.cvr_prior_alpha, cfg.cvr_prior_beta, 4000), 0.9))
+    return cfg.default_cpc / (cvr_p90 * cfg.signup_to_booking_rate)
 
 
 def economics(db: Db, as_of: date, forecast: Forecast, cfg: GrowthConfig) -> dict:
@@ -152,16 +162,22 @@ def decide(campaigns: List[dict], efficiency: Dict[int, dict], econ: dict, gap: 
             survivors.append(c)
 
     # 2) How much budget does the gap justify?
-    known = [eff(c)["cpa"] for c in survivors if eff(c)["cpa"]]
-    blended_cpa = float(np.mean(known)) if known else cfg.default_cpc / (
-        cfg.cvr_prior_alpha / (cfg.cvr_prior_alpha + cfg.cvr_prior_beta) * cfg.signup_to_booking_rate)
+    # Optimism under uncertainty: until some campaign has enough clicks to judge, price
+    # ads at the optimistic end of the prior so the loop explores (small budget) instead
+    # of never trying; real data then takes over and step 1 pauses what doesn't pay back.
+    judged = [eff(c)["cpa"] for c in survivors
+              if eff(c)["cpa"] and c.get("clicks", 0) >= cfg.min_clicks_for_judgement]
+    exploring = not judged
+    blended_cpa = float(np.mean(judged)) if judged else optimistic_prior_cpa(cfg)
     if blended_cpa > max_cpa:
         required = 0.0
     else:
         required = gap["gap_slots_next_7_days"] / 7.0 * blended_cpa
     required = min(required, cfg.max_total_daily_budget)
+    if exploring:
+        required = min(required, cfg.max_total_daily_budget * EXPLORE_BUDGET_SHARE)
     plan = {"blended_cpa": round(blended_cpa, 2), "required_daily_budget": round(required, 2),
-            "max_total_daily_budget": cfg.max_total_daily_budget}
+            "max_total_daily_budget": cfg.max_total_daily_budget, "exploring": exploring}
 
     # 3) Book is (nearly) full -> step budgets down, pause when they fall below the floor.
     if required < cfg.min_campaign_daily_budget:
@@ -196,7 +212,8 @@ def decide(campaigns: List[dict], efficiency: Dict[int, dict], econ: dict, gap: 
         else:
             decisions.append(Decision("create",
                 f"{gap['gap_slots_next_7_days']:.1f} open slots next 7 days on {gap_names}; "
-                f"est. ${blended_cpa:.0f} per booked new client vs ${max_cpa:.0f} ceiling",
+                f"est. ${blended_cpa:.0f} per booked new client vs ${max_cpa:.0f} ceiling"
+                + (" (exploring: optimistic estimate until real click data arrives)" if exploring else ""),
                 None, budget, gap_days))
         return plan, decisions
 
