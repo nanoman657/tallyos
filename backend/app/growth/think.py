@@ -39,6 +39,7 @@ from .forecast import Forecast
 
 WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 GAP_WEEKDAY_THRESHOLD = 0.10       # a weekday "has a gap" if >10% of its target slots are unfilled
+GAP_WEEKDAY_KEEP_THRESHOLD = 0.05  # hysteresis: a day already in the ad schedule stays until <5%
 NEW_CLIENT_RETURN_PRIOR = 0.5
 NEW_CLIENT_RETURN_PRIOR_WEIGHT = 10.0
 
@@ -63,14 +64,14 @@ def economics(db: Db, as_of: date, forecast: Forecast, cfg: GrowthConfig) -> dic
     ticket = t["ticket"] or db.scalar("SELECT avg(price) FROM services WHERE active") or 35.0
     margin = ticket * (1 - shop["card_fee_rate"] - (t["commission"] or 0.0)) - (t["cogs"] or 0.0)
 
-    # Share of clients who returned for a 2nd visit, among those first seen 60-365 days ago.
+    # Share of new clients (joined 60-365 days ago and visited at least once) who came back.
     r = db.one(
-        """WITH firsts AS (
-               SELECT client_id, min(start_at) AS first_at, count(*) AS visits FROM appointments
-               WHERE status = 'completed' GROUP BY client_id)
-           SELECT count(*) AS n, count(*) FILTER (WHERE visits >= 2) AS returned FROM firsts
-           WHERE first_at < %s AND first_at >= %s""",
-        [as_of - timedelta(days=60), as_of - timedelta(days=365)],
+        """SELECT count(*) AS n, count(*) FILTER (WHERE v.visits >= 2) AS returned
+           FROM clients c JOIN (SELECT client_id, count(*) AS visits FROM appointments
+                                WHERE status = 'completed' AND start_at < %s GROUP BY client_id) v
+                ON v.client_id = c.id
+           WHERE c.created_at < %s AND c.created_at >= %s""",
+        [as_of, as_of - timedelta(days=60), as_of - timedelta(days=365)],
     )
     return_rate = ((r["returned"] + NEW_CLIENT_RETURN_PRIOR * NEW_CLIENT_RETURN_PRIOR_WEIGHT)
                    / (r["n"] + NEW_CLIENT_RETURN_PRIOR_WEIGHT))
@@ -203,6 +204,11 @@ def decide(campaigns: List[dict], efficiency: Dict[int, dict], econ: dict, gap: 
     weights = np.array([1.0 / (eff(c)["cpa"] or blended_cpa) for c in survivors])
     shares = weights / weights.sum()
     for c, share in zip(survivors, shares):
+        # Hysteresis so the ad schedule doesn't flap between cycles on small forecast moves.
+        shares_by_day = gap["gap_share_by_weekday"]
+        keep = [wd for wd in c["target_weekdays"]
+                if shares_by_day[wd] is not None and shares_by_day[wd] > GAP_WEEKDAY_KEEP_THRESHOLD]
+        wanted_days = sorted(set(gap["gap_weekdays"]) | set(keep)) or gap_days
         want = required * float(share)
         current = c["daily_budget"]
         new_budget = min(want, current * cfg.budget_step_up)
@@ -213,8 +219,10 @@ def decide(campaigns: List[dict], efficiency: Dict[int, dict], econ: dict, gap: 
             decisions.append(Decision("scale",
                 f"{verb} budget ${current:.0f} -> ${new_budget:.0f}/day toward ${required:.0f}/day needed for "
                 f"{gap['gap_slots_next_7_days']:.1f} open slots", c["id"], new_budget))
-        if sorted(c["target_weekdays"]) != sorted(gap_days):
-            decisions.append(Decision("reschedule", f"Gaps moved to {gap_names}", c["id"], target_weekdays=gap_days))
+        if sorted(c["target_weekdays"]) != wanted_days:
+            names = ", ".join(WEEKDAY_NAMES[w] for w in wanted_days)
+            decisions.append(Decision("reschedule", f"Open-chair days are now {names}", c["id"],
+                                      target_weekdays=wanted_days))
     if not decisions:
         decisions.append(Decision("hold", "Campaigns are on target; no change"))
     return plan, decisions
