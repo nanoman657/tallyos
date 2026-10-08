@@ -26,26 +26,33 @@ BASE_KEYWORDS = ["barber near me", "barbershop near me", "mens haircut near me",
 
 
 def _days_phrase(weekdays: List[int]) -> str:
-    if not weekdays or len(weekdays) >= 6:
+    if not weekdays or len(weekdays) >= 4:
         return "This Week"
     names = [WEEKDAY_NAMES[w] for w in sorted(weekdays)]
     return " & ".join(names) if len(names) <= 2 else ", ".join(names[:-1]) + " & " + names[-1]
 
 
 def _fit(text: str, limit: int) -> str:
-    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+    """Trim to Google's character limit on a word boundary (no ellipsis: ads policy rejects gimmicky punctuation)."""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0]
+    return cut.rstrip(" ,&-")
 
 
 def generate_ad_copy(db: Db, weekdays: List[int]) -> dict:
     """Responsive search ad assets built from the live service menu and the gap days."""
     shop = db.one("SELECT name FROM shop WHERE id = 1")
-    services = db.all("SELECT name, price FROM services WHERE active ORDER BY price")
+    # Most-booked services first: that's what local searchers are looking for.
+    services = db.all("""SELECT s.name, s.price FROM services s LEFT JOIN appointments a ON a.service_id = s.id
+                         WHERE s.active GROUP BY s.id ORDER BY count(a.id) DESC, s.price""")
     days = _days_phrase(weekdays)
-    cheapest = services[0] if services else {"name": "Haircut", "price": 35}
+    top = services[0] if services else {"name": "Haircut", "price": 35}
+    cheapest = min(services, key=lambda s: s["price"]) if services else top
     headlines = [
         _fit(shop["name"], 30),
         _fit(f"Open Chairs {days}", 30),
-        _fit(f"{cheapest['name']} ${cheapest['price']:.0f}", 30),
+        _fit(f"{top['name']} ${top['price']:.0f}", 30),
         "Book Online In 30 Seconds",
         "Top-Rated Local Barber",
     ]

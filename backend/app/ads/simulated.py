@@ -160,7 +160,9 @@ class SimulatedGoogleAds:
                     gclid=gclid, at=at)
                 if rng.random() >= SIGNUP_BOOK_PROB:
                     continue
-                service = self.db.one("SELECT id FROM services WHERE active ORDER BY price LIMIT 1")
+                service = self.db.one(
+                    """SELECT s.id FROM services s LEFT JOIN appointments a ON a.service_id = s.id
+                       WHERE s.active GROUP BY s.id ORDER BY count(a.id) DESC, s.id LIMIT 1""")
                 slot = erp.first_free_slot(self.db, service["id"], day + timedelta(days=1),
                                            st["weekdays"] or None, search_days=10)
                 if slot:
