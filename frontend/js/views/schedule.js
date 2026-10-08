@@ -1,6 +1,6 @@
 // Schedule: swipeable day strip, day's appointments, booking sheet with live availability.
 import { api } from "../api.js";
-import { DOW, addDays, busy, esc, hhmm, isoDate, money, parseLocal, sheet, sourceChip, statusChip, toast, today, weekdayIdx } from "../ui.js";
+import { DOW, LATE_GRACE_MIN, addDays, booksyChip, busy, esc, hhmm, isoDate, lateChip, money, parseLocal, sheet, sourceChip, statusChip, toast, today, weekdayIdx } from "../ui.js";
 import { checkout } from "./today.js";
 
 let selected = null;
@@ -46,8 +46,8 @@ async function loadDay(el, shop) {
       <span class="small muted">${open ? `${Math.round((minutes / Math.max(cap, 1)) * 100)}% of chair time booked` : "Closed"}</span></div>
     ${appts.length ? `<ul class="list">${appts.map((a) => `<li><button class="row" data-id="${a.id}">
         <span class="time">${hhmm(a.start_at)}</span>
-        <div class="grow"><div class="title">${esc(a.client_name)}</div><div class="meta">${esc(a.service_name)} · ${a.duration_min} min · ${esc(a.staff_name)} ${a.client_source === "google_ads" ? sourceChip("google_ads") : ""}</div></div>
-        ${statusChip(a.status)}</button></li>`).join("")}</ul>`
+        <div class="grow"><div class="title">${esc(a.client_name)}</div><div class="meta">${esc(a.service_name)} · ${a.duration_min} min · ${esc(a.staff_name)} ${booksyChip(a)} ${a.client_source === "google_ads" ? sourceChip("google_ads") : ""}</div></div>
+        ${lateChip(a.minutes_late)} ${statusChip(a.status)}</button></li>`).join("")}</ul>`
       : `<div class="empty">${open ? "Nothing booked yet. Tap + to add a booking." : "The shop is closed this day."}</div>`}`;
   box.querySelectorAll("[data-id]").forEach((b) => b.addEventListener("click", () => apptActions(appts.find((a) => a.id === +b.dataset.id), () => loadDay(el, shop))));
 }
@@ -60,12 +60,20 @@ function apptActions(a, refresh) {
     <div class="stat-row"><span>Barber</span><b>${esc(a.staff_name)}</b></div>
     <div class="stat-row"><span>Phone</span><b>${a.client_phone ? `<a href="tel:${esc(a.client_phone)}">${esc(a.client_phone)}</a>` : "–"}</b></div>
     <div class="stat-row"><span>Status</span>${statusChip(a.status)}</div>
+    <div class="stat-row"><span>Arrived</span><span>${a.arrived_at ? `${hhmm(a.arrived_at)} ${lateChip(a.minutes_late)}` : "–"}</span></div>
+    ${a.external_source === "booksy" ? `<div class="stat-row"><span>Booked via</span><b>Booksy</b></div>` : ""}
     ${live ? `<div class="btn-row" style="margin-top:16px">
+      ${a.arrived_at ? "" : `<button class="btn" id="arr">Arrived</button>`}
       <button class="btn primary" id="co">Check out</button>
       <button class="btn" data-s="no_show">No-show</button>
       <button class="btn danger" data-s="cancelled">Cancel</button></div>` : ""}
     <p style="margin-top:14px"><a href="#/clients/${a.client_id}">Open client profile</a></p>`, (body, close) => {
     body.querySelector("#co")?.addEventListener("click", () => { close(); checkout(a, refresh); });
+    const arr = body.querySelector("#arr");
+    arr?.addEventListener("click", busy(arr, async () => {
+      const r = await api.post(`/api/appointments/${a.id}/checkin`, {});
+      close(); toast(r.minutes_late > LATE_GRACE_MIN ? `Checked in - ${r.minutes_late} min late` : "Checked in - on time"); refresh();
+    }));
     body.querySelectorAll("[data-s]").forEach((b) => b.addEventListener("click", busy(b, async () => {
       await api.post(`/api/appointments/${a.id}/status`, { status: b.dataset.s });
       close(); toast(b.dataset.s === "cancelled" ? "Booking cancelled" : "Marked as no-show"); refresh();

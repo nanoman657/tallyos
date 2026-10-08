@@ -1,6 +1,6 @@
 // Clients: searchable book, client profile with visit history and the forecaster's rebooking outlook.
 import { api } from "../api.js";
-import { busy, esc, initials, money, pct, sheet, shortDate, sourceChip, statusChip, toast, today } from "../ui.js";
+import { busy, esc, initials, lateChip, money, num, parseLocal, pct, sheet, shortDate, sourceChip, statusChip, toast, today } from "../ui.js";
 import { bookSheet } from "./schedule.js";
 
 export async function render(el, [clientId]) {
@@ -18,7 +18,8 @@ export async function render(el, [clientId]) {
         <span class="avatar">${initials(c.name)}</span>
         <div class="grow"><div class="title">${esc(c.name)}</div>
           <div class="meta">${c.visits || 0} visits${c.last_visit ? ` · last ${shortDate(c.last_visit)}` : ""}${c.next_at ? ` · next ${shortDate(c.next_at)}` : ""}</div></div>
-        ${c.source === "google_ads" ? sourceChip("google_ads") : ""}</button></li>`).join("")
+        ${c.often_late ? `<span class="chip warn"><span class="dot"></span>often late</span>` : ""}
+        ${c.source === "google_ads" || c.source === "booksy" ? sourceChip(c.source) : ""}</button></li>`).join("")
       : `<li class="empty">No clients match.</li>`;
     list.querySelectorAll("[data-id]").forEach((b) => b.addEventListener("click", () => profile(+b.dataset.id)));
   };
@@ -47,10 +48,22 @@ async function profile(id) {
       <div class="stat-row"><span>Next visit expected</span><b>${o.next_booked ? `booked ${shortDate(o.next_booked)}` : o.next_visit_expected ? shortDate(o.next_visit_expected) : "–"}</b></div>
       <div class="stat-row"><span>Chance they book in the next 30 days</span><b>${pct(o.p_within_horizon)}</b></div>
       ${o.status === "overdue" || o.status === "lapsed" ? `<p class="small muted">Overdue clients are good candidates for a personal text before spending on ads.</p>` : ""}` : ""}
+    ${punctualityHtml(c.punctuality)}
     <h3 style="margin-top:16px">History</h3>
     <ul class="list">${c.appointments.slice(0, 12).map((a) => `<li><div class="grow"><div class="title">${esc(a.service_name)}</div>
-      <div class="meta">${shortDate(a.start_at)} · ${money(a.price)}</div></div>${statusChip(a.status)}</li>`).join("") || `<li class="muted">No visits yet</li>`}</ul>`,
+      <div class="meta">${shortDate(a.start_at)} · ${money(a.price)}${a.external_source === "booksy" ? " · Booksy" : ""}</div></div>
+      ${lateChip(a.arrived_at ? Math.max(0, Math.round((parseLocal(a.arrived_at) - parseLocal(a.start_at)) / 60000)) : null)}${statusChip(a.status)}</li>`).join("") || `<li class="muted">No visits yet</li>`}</ul>`,
   (body, close) => body.querySelector("#book").addEventListener("click", () => { close(); bookSheet(today(), () => toast("Booked"), c); }));
+}
+
+function punctualityHtml(p) {
+  if (!p || (!p.tracked_arrivals && !p.no_shows)) return "";
+  return `<h3 style="margin-top:16px">Punctuality ${p.chronic ? `<span class="chip warn"><span class="dot"></span>often late</span>` : ""}</h3>
+    <div class="stat-row"><span>Late (over ${p.grace_minutes} min)</span><b>${p.late_count} of ${p.tracked_arrivals} visits</b></div>
+    ${p.avg_minutes_late_when_late ? `<div class="stat-row"><span>Usually late by</span><b>${num(p.avg_minutes_late_when_late)} min</b></div>` : ""}
+    ${p.worst_minutes_late ? `<div class="stat-row"><span>Latest arrival</span><b>${p.worst_minutes_late} min</b></div>` : ""}
+    <div class="stat-row"><span>No-shows</span><b>${p.no_shows}${p.no_show_rate != null ? ` (${pct(p.no_show_rate)})` : ""}</b></div>
+    ${p.chronic ? `<p class="small muted">Consider booking them into the last slot before a break, or asking them to arrive 10 minutes early.</p>` : ""}`;
 }
 
 function addClient(onDone) {
