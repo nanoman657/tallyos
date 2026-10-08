@@ -1,7 +1,7 @@
 // Today: KPIs, today's chair, checkout, this week's booking forecast, low stock.
 import { api } from "../api.js";
 import { stackedColumns } from "../charts.js";
-import { DOW, busy, dayLabel, esc, hhmm, money, num, parseLocal, sheet, sourceChip, statusChip, toast } from "../ui.js";
+import { DOW, LATE_GRACE_MIN, booksyChip, busy, dayLabel, esc, hhmm, lateChip, money, num, parseLocal, pct, sheet, sourceChip, statusChip, toast } from "../ui.js";
 
 export async function render(el) {
   const d = await api.get("/api/dashboard");
@@ -29,6 +29,7 @@ export async function render(el) {
           <div id="week"></div>
           <p class="small muted" style="margin:8px 0 0">Predicted bookings use each client's own rebooking rhythm. Gaps under the dashed line are what the growth loop advertises to fill.</p>
         </section>
+        ${punctualityCard(d.punctuality_28d)}
         ${d.low_stock.length ? `<section class="card"><div class="card-head"><h2>Low stock</h2><a href="#/more/inventory" class="small">Inventory</a></div>
           <ul class="list">${d.low_stock.map((p) => `<li><div class="grow"><div class="title">${esc(p.name)}</div><div class="meta">${p.on_hand} on hand · reorder at ${p.reorder_point}</div></div><span class="chip warn">reorder ${p.reorder_qty}</span></li>`).join("")}</ul></section>` : ""}
       </div>
@@ -46,6 +47,11 @@ export async function render(el) {
   });
 
   el.querySelectorAll("[data-checkout]").forEach((b) => b.addEventListener("click", () => checkout(live.find((a) => a.id === +b.dataset.checkout))));
+  el.querySelectorAll("[data-arrived]").forEach((b) => b.addEventListener("click", busy(b, async () => {
+    const r = await api.post(`/api/appointments/${b.dataset.arrived}/checkin`, {});
+    toast(r.minutes_late > LATE_GRACE_MIN ? `Checked in - ${r.minutes_late} min late` : "Checked in - on time");
+    window.dispatchEvent(new Event("tallyos:refresh"));
+  })));
   el.querySelectorAll("[data-noshow]").forEach((b) => b.addEventListener("click", busy(b, async () => {
     await api.post(`/api/appointments/${b.dataset.noshow}/status`, { status: "no_show" });
     toast("Marked as no-show");
@@ -54,12 +60,30 @@ export async function render(el) {
 }
 
 function row(a) {
-  const actions = a.status === "booked"
-    ? `<div class="btn-row"><button class="btn small primary" data-checkout="${a.id}">Check out</button><button class="btn small ghost" data-noshow="${a.id}" aria-label="No-show">No-show</button></div>`
-    : statusChip(a.status);
+  let actions;
+  if (a.status !== "booked") actions = `${lateChip(a.minutes_late)} ${statusChip(a.status)}`;
+  else if (a.arrived_at == null && arrivalWindow(a)) {
+    actions = `<div class="btn-row"><button class="btn small primary" data-arrived="${a.id}">Arrived</button>
+      <button class="btn small ghost" data-noshow="${a.id}" aria-label="No-show">No-show</button></div>`;
+  } else actions = `${lateChip(a.minutes_late)}<button class="btn small primary" data-checkout="${a.id}">Check out</button>`;
   return `<li><span class="time">${hhmm(a.start_at)}</span>
-    <div class="grow"><div class="title">${esc(a.client_name)}</div><div class="meta">${esc(a.service_name)} · ${money(a.price)} ${a.client_source === "google_ads" ? sourceChip("google_ads") : ""}</div></div>
-    ${actions}</li>`;
+    <div class="grow"><div class="title">${esc(a.client_name)}</div><div class="meta">${esc(a.service_name)} · ${money(a.price)} ${booksyChip(a)} ${a.client_source === "google_ads" ? sourceChip("google_ads") : ""}</div></div>
+    <div class="btn-row" style="align-items:center;flex-wrap:nowrap">${actions}</div></li>`;
+}
+
+// "Arrived" only makes sense around the booking: from an hour before until the slot ends.
+function arrivalWindow(a) {
+  const start = parseLocal(a.start_at).getTime(), now = Date.now();
+  return now >= start - 3600_000 && now <= start + a.duration_min * 60_000;
+}
+
+function punctualityCard(p) {
+  if (!p || !p.tracked_arrivals) return "";
+  return `<section class="card"><div class="card-head"><h2>Punctuality</h2><a href="#/more/punctuality" class="small">Report</a></div>
+    <div class="stat-row"><span>Arrived on time (28 days)</span><b>${pct(p.on_time_share)}</b></div>
+    <div class="stat-row"><span>Average lateness when late</span><b>${num(p.avg_minutes_late_when_late, 0)} min</b></div>
+    <div class="stat-row"><span>Chair time lost to late arrivals</span><b>${num(p.chair_minutes_lost_to_lateness / 60, 1)} h</b></div>
+    <div class="stat-row"><span>No-shows</span><b>${p.no_shows} (${pct(p.no_show_rate, 1)})</b></div></section>`;
 }
 
 export async function checkout(appt, onDone) {

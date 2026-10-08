@@ -70,7 +70,19 @@ export const statusChip = (status) => {
   return `<span class="chip ${map[status] ?? ""}"><span class="dot"></span>${esc(label)}</span>`;
 };
 
-export const sourceChip = (source) =>
-  source === "google_ads" || source === "gclid" || source === "utm" || source === "gclid_pending"
-    ? `<span class="chip ads"><span class="dot"></span>${source === "gclid_pending" ? "Google Ads (matching)" : "Google Ads"}</span>`
-    : `<span class="chip">${esc(String(source || "organic").replace("_", " "))}</span>`;
+export const sourceChip = (source) => {
+  if (["google_ads", "gclid", "utm", "gclid_pending"].includes(source)) {
+    return `<span class="chip ads"><span class="dot"></span>${source === "gclid_pending" ? "Google Ads (matching)" : "Google Ads"}</span>`;
+  }
+  if (source === "booksy") return `<span class="chip">Booksy</span>`;
+  return `<span class="chip">${esc(String(source || "organic").replace("_", " "))}</span>`;
+};
+
+// Arrival vs. booked time. Grace matches the backend (punctuality.LATE_GRACE_MIN).
+export const LATE_GRACE_MIN = 5;
+export const lateChip = (minutes) => {
+  if (minutes == null) return "";
+  if (minutes <= LATE_GRACE_MIN) return `<span class="chip good"><span class="dot"></span>on time</span>`;
+  return `<span class="chip ${minutes >= 15 ? "bad" : "warn"}"><span class="dot"></span>${minutes} min late</span>`;
+};
+export const booksyChip = (a) => (a.external_source === "booksy" ? `<span class="chip">Booksy</span>` : "");
