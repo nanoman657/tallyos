@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import erp
+from .. import erp, punctuality
 from ..db import Db, get_db
 from ..growth.forecast import build_forecast
 
@@ -106,10 +106,15 @@ class ClientIn(BaseModel):
 @router.get("/clients")
 def list_clients(q: str = "", limit: int = 100, db: Db = Depends(get_db)):
     return db.all(
-        """SELECT c.*, v.visits, v.last_visit, v.spend, n.next_at
+        f"""SELECT c.*, v.visits, v.last_visit, v.spend, n.next_at,
+                  coalesce(p.tracked >= {punctuality.CHRONIC_MIN_VISITS}
+                           AND p.late >= {punctuality.CHRONIC_LATE_SHARE} * p.tracked, false) AS often_late
            FROM clients c
            LEFT JOIN (SELECT client_id, count(*) AS visits, max(start_at) AS last_visit, sum(price) AS spend
                       FROM appointments WHERE status = 'completed' GROUP BY client_id) v ON v.client_id = c.id
+           LEFT JOIN (SELECT client_id, count(*) AS tracked,
+                             count(*) FILTER (WHERE arrived_at > start_at + interval '{punctuality.LATE_GRACE_MIN} minutes') AS late
+                      FROM appointments WHERE arrived_at IS NOT NULL GROUP BY client_id) p ON p.client_id = c.id
            LEFT JOIN (SELECT client_id, min(start_at) AS next_at FROM appointments
                       WHERE status = 'booked' AND start_at >= now() GROUP BY client_id) n ON n.client_id = c.id
            WHERE c.name ILIKE %s OR coalesce(c.phone,'') ILIKE %s OR coalesce(c.email,'') ILIKE %s
@@ -139,6 +144,7 @@ def client_detail(client_id: int, db: Db = Depends(get_db)):
            WHERE a.client_id = %s ORDER BY a.start_at DESC""", [client_id])
     fc = build_forecast(db, date.today(), 30, include_clients=True)
     client["outlook"] = next((o for o in fc.clients if o.client_id == client_id), None)
+    client["punctuality"] = punctuality.client_punctuality(db, client_id)
     return client
 
 
@@ -165,7 +171,9 @@ def list_appointments(start: date, end: Optional[date] = None, db: Db = Depends(
     end = end or start + timedelta(days=1)
     return db.all(
         """SELECT a.*, c.name AS client_name, c.phone AS client_phone, c.source AS client_source,
-                  s.name AS service_name, st.name AS staff_name
+                  s.name AS service_name, st.name AS staff_name,
+                  CASE WHEN a.arrived_at IS NOT NULL
+                       THEN greatest(0, round(extract(epoch FROM (a.arrived_at - a.start_at)) / 60))::int END AS minutes_late
            FROM appointments a JOIN clients c ON c.id = a.client_id
            JOIN services s ON s.id = a.service_id JOIN staff st ON st.id = a.staff_id
            WHERE a.start_at >= %s AND a.start_at < %s ORDER BY a.start_at""", [start, end])
@@ -292,4 +300,6 @@ def dashboard(db: Db = Depends(get_db)):
         "month_to_date": {k: month[k] for k in ("revenue", "operating_profit", "ad_spend", "tickets", "avg_ticket")},
         "low_stock": erp.low_stock(db),
         "new_signups_7d": db.scalar("SELECT count(*) FROM signups WHERE at >= %s", [today - timedelta(days=7)]),
+        "punctuality_28d": {k: v for k, v in punctuality.shop_report(db, today - timedelta(days=28), today + timedelta(days=1)).items()
+                            if k not in ("late_share_by_weekday", "chronic_latecomers")},
     }
