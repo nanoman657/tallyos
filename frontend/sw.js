@@ -1,5 +1,5 @@
 // Service worker: app shell works offline; API calls always go to the network.
-const CACHE = "tallyos-v1";
+const CACHE = "tallyos-v2";
 const SHELL = [
   "./", "index.html", "join.html", "css/app.css", "manifest.webmanifest", "icons/icon.svg",
   "js/app.js", "js/api.js", "js/ui.js", "js/charts.js", "js/join.js",

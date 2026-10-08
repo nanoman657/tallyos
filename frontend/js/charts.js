@@ -35,7 +35,8 @@ function topRounded(x, y, w, h, r) {
  * rows:   [{ label, sub?, values: {key: n}, target?: n, extra?: [[k, v]] }]
  * series: [{ key, label, color }]   (bottom -> top stacking order)
  */
-export function stackedColumns(el, { rows, series, targetLabel, height = 200, valueFmt = (v) => v.toFixed(1) }) {
+export function stackedColumns(el, opts) {
+  const { rows, series, targetLabel, height = 200, valueFmt = (v) => v.toFixed(1) } = opts;
   const draw = () => {
     const W = Math.max(280, el.clientWidth);
     const m = { t: 10, r: 6, b: 34, l: 28 };
@@ -78,7 +79,7 @@ export function stackedColumns(el, { rows, series, targetLabel, height = 200, va
     });
     svg += `<line class="baseline" x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}"/></svg>`;
 
-    const legend = `<div class="legend">${series.map((s) => `<span><span class="sw" style="background:var(${s.color})"></span>${esc(s.label)}</span>`).join("")}
+    const legend = opts.legend === false ? "" : `<div class="legend">${series.map((s) => `<span><span class="sw" style="background:var(${s.color})"></span>${esc(s.label)}</span>`).join("")}
       ${targetLabel ? `<span><span class="sw line"></span>${esc(targetLabel)}</span>` : ""}</div>`;
     el.innerHTML = svg + legend;
 

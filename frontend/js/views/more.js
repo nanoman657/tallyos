@@ -1,8 +1,10 @@
 // More: inventory, finance (P&L + tax waterfall), menu & staff, settings.
 import { api } from "../api.js";
-import { DOW, busy, esc, isoDate, money, pct, sheet, toast, today } from "../ui.js";
+import { chartWithTable } from "../charts.js";
+import { DOW, busy, esc, isoDate, money, num, pct, sheet, shortDate, toast, today } from "../ui.js";
 
-const SECTIONS = { inventory: "Inventory", finance: "Finance", menu: "Menu & staff", settings: "Settings" };
+const SECTIONS = { finance: "Finance", punctuality: "Punctuality", booksy: "Booksy", inventory: "Inventory",
+                   menu: "Menu & staff", settings: "Settings" };
 
 export async function render(el, [section = "finance"]) {
   el.innerHTML = `
@@ -12,7 +14,98 @@ export async function render(el, [section = "finance"]) {
     <div id="body"></div>`;
   el.querySelectorAll("[data-s]").forEach((b) => b.addEventListener("click", () => { location.hash = `#/more/${b.dataset.s}`; }));
   const body = el.querySelector("#body");
-  await ({ inventory, finance, menu, settings }[section] || finance)(body);
+  await ({ inventory, finance, punctuality, booksy, menu, settings }[section] || finance)(body);
+}
+
+async function punctuality(el, days = 28) {
+  const r = await api.get(`/api/punctuality?days=${days}`);
+  el.innerHTML = `
+    <div class="seg" role="group" aria-label="Period" style="margin-bottom:12px">
+      ${[[28, "4 weeks"], [90, "3 months"], [365, "Year"]].map(([d, l]) => `<button aria-pressed="${d === days}" data-d="${d}">${l}</button>`).join("")}</div>
+    <div class="kpis">
+      <div class="kpi"><div class="label">On time</div><div class="value">${pct(r.on_time_share)}</div><div class="hint">within ${r.grace_minutes} min · ${r.tracked_arrivals} arrivals</div></div>
+      <div class="kpi"><div class="label">Late arrivals</div><div class="value">${r.late_count}</div><div class="hint">avg ${num(r.avg_minutes_late_when_late)} min late</div></div>
+      <div class="kpi"><div class="label">Chair time lost</div><div class="value">${num(r.chair_minutes_lost_to_lateness / 60, 1)} h</div><div class="hint">to late arrivals</div></div>
+      <div class="kpi"><div class="label">No-shows</div><div class="value">${r.no_shows}</div><div class="hint">${pct(r.no_show_rate, 1)} · ${num(r.chair_minutes_lost_to_no_shows / 60, 1)} h lost</div></div>
+    </div>
+    <div class="grid-2">
+      <section class="card"><h2>Late arrivals by day</h2><div id="wd"></div>
+        <p class="small muted" style="margin:8px 0 0">Share of tracked arrivals more than ${r.grace_minutes} minutes after the booked time.</p></section>
+      <section class="card"><div class="card-head"><h2>Often late</h2><span class="small muted">last 6 months</span></div>
+        ${r.chronic_latecomers.length ? `<ul class="list">${r.chronic_latecomers.map((c) => `<li>
+          <div class="grow"><div class="title"><a href="#/clients/${c.id}">${esc(c.name)}</a></div>
+          <div class="meta">late ${c.late} of ${c.tracked} visits · usually ${num(c.avg_late)} min</div></div>
+          ${c.phone ? `<a class="btn small" href="sms:${esc(c.phone)}?body=${encodeURIComponent("Hey " + c.name.split(" ")[0] + ", quick reminder to arrive a few minutes early for your next cut so we can give you the full time. Thanks!")}">Text</a>` : ""}</li>`).join("")}</ul>`
+          : `<div class="empty">Nobody is regularly late. Nice.</div>`}</section>
+    </div>
+    ${r.tracked_arrivals ? "" : `<p class="muted small">No arrival times yet. Tap <b>Arrived</b> on Today when a client walks in, or import Booksy check-in times.</p>`}`;
+  el.querySelectorAll("[data-d]").forEach((b) => b.addEventListener("click", () => punctuality(el, +b.dataset.d)));
+  const rows = r.late_share_by_weekday.filter((w) => w.tracked);
+  if (rows.length) {
+    chartWithTable(el.querySelector("#wd"), {
+      rows: rows.map((w) => ({ label: DOW[w.weekday], values: { late: (w.late_share || 0) * 100 }, extra: [["Arrivals tracked", String(w.tracked)]] })),
+      series: [{ key: "late", label: "Late arrivals", color: "--series-1" }],
+      height: 160, legend: false, valueFmt: (v) => `${v.toFixed(0)}%`,
+    });
+  }
+}
+
+async function booksy(el) {
+  const s = await api.get("/api/integrations/booksy");
+  const hook = `${location.origin}${s.webhook_path}?secret=YOUR_BOOKSY_WEBHOOK_SECRET`;
+  el.innerHTML = `<div class="grid-2">
+    <section class="card"><h2>Connection</h2>
+      <div class="stat-row"><span>Partner API</span><b>${s.api_configured ? "Connected" : "Not configured"}</b></div>
+      <div class="stat-row"><span>Webhooks</span><b>${s.webhook_configured ? "Ready" : "Not configured"}</b></div>
+      <div class="stat-row"><span>Last sync</span><b>${s.last_sync_at ? `${shortDate(s.last_sync_at)} · ${s.last_sync_summary.created || 0} new, ${s.last_sync_summary.updated || 0} updated` : "–"}</b></div>
+      <div class="stat-row"><span>Booksy bookings in TallyOS</span><b>${num(s.booksy_appointments)}</b></div>
+      <div class="stat-row"><span>Visits with an arrival time</span><b>${num(s.with_arrival_time)}</b></div>
+      <div class="btn-row" style="margin-top:12px"><button class="btn primary" id="sync" ${s.api_configured ? "" : "disabled"}>Sync now</button></div>
+      ${s.api_configured ? "" : `<p class="small muted">Booksy's API is partner-only. Ask your Booksy rep for partner API access, then set
+        <code>BOOKSY_API_URL</code>, <code>BOOKSY_API_TOKEN</code> and <code>BOOKSY_BUSINESS_ID</code> on the server. Until then, import a CSV export.</p>`}
+    </section>
+    <section class="card"><h2>Import a Booksy export</h2>
+      <p class="small muted">Export your appointments from Booksy Biz as CSV and pick the file. Re-importing the same file updates bookings instead of duplicating them.
+        A check-in / arrival time column is used to measure lateness.</p>
+      <label class="field"><span>CSV file</span><input type="file" id="csv" accept=".csv,text/csv"></label>
+      <div id="import-result"></div>
+    </section>
+    <section class="card"><h2>Live updates (webhooks)</h2>
+      <p class="small muted">When Booksy enables webhooks for your account, give them this URL so new, changed and cancelled bookings arrive instantly:</p>
+      <input readonly value="${esc(hook)}" aria-label="Webhook URL" onclick="this.select()">
+      <p class="small muted">Set the same secret as <code>BOOKSY_WEBHOOK_SECRET</code> on the server. Calls without it are refused.</p>
+    </section>
+    <section class="card"><h2>Recent activity</h2>
+      ${s.recent_events.length ? `<ul class="list">${s.recent_events.map((e) => `<li><div class="grow">
+        <div class="title">${esc(e.kind.replace("_", " "))} · ${esc(e.action || "")}</div>
+        <div class="meta">${shortDate(e.received_at)} · ${esc(e.external_id || "")}${e.error ? ` · ${esc(e.error)}` : ""}</div></div>
+        <span class="chip ${e.result === "error" ? "bad" : e.result === "created" ? "good" : ""}">${esc(e.result || "")}</span></li>`).join("")}</ul>`
+        : `<div class="empty">Nothing received from Booksy yet.</div>`}
+    </section></div>`;
+  const sync = el.querySelector("#sync");
+  sync.addEventListener("click", busy(sync, async () => {
+    const r = await api.post("/api/integrations/booksy/sync");
+    toast(`Booksy: ${r.created} new, ${r.updated} updated${r.error ? `, ${r.error} errors` : ""}`);
+    booksy(el);
+  }));
+  el.querySelector("#csv").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const out = el.querySelector("#import-result");
+    out.innerHTML = `<p class="muted small">Importing ${esc(file.name)}…</p>`;
+    try {
+      const r = await api.postText("/api/integrations/booksy/import", await file.text());
+      out.innerHTML = `
+        <div class="stat-row"><span>Rows read</span><b>${r.rows}</b></div>
+        <div class="stat-row"><span>New · updated · unchanged</span><b>${r.created} · ${r.updated} · ${r.unchanged}</b></div>
+        <div class="stat-row"><span>Rows with problems</span><b>${r.error}</b></div>
+        <details><summary>Columns matched</summary><p class="small">${Object.entries(r.columns).map(([k, v]) => `${esc(k)} ← “${esc(v)}”`).join("<br>")}</p></details>
+        ${r.errors.length ? `<details open><summary>Problems</summary><p class="small">${r.errors.map((x) => `Row ${x.row}: ${esc(x.error)}`).join("<br>")}</p></details>` : ""}`;
+      toast(r.created + r.updated ? `Booksy: ${r.created} new, ${r.updated} updated` : "Already up to date with this file");
+    } catch (err) {
+      out.innerHTML = `<p class="small" style="color:var(--critical)">${esc(err.message)}</p>`;
+    }
+  });
 }
 
 async function inventory(el) {

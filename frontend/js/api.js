@@ -1,11 +1,12 @@
 // Thin fetch wrapper for the TallyOS backend.
 const BASE = window.TALLYOS_API || "";
 
-async function request(method, path, body) {
+async function request(method, path, body, contentType = "application/json") {
+  const raw = typeof body === "string";
   const res = await fetch(BASE + path, {
     method,
-    headers: body ? { "content-type": "application/json" } : {},
-    body: body ? JSON.stringify(body) : undefined,
+    headers: body != null ? { "content-type": contentType } : {},
+    body: body == null ? undefined : raw ? body : JSON.stringify(body),
   });
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
@@ -21,4 +22,5 @@ export const api = {
   post: (p, b) => request("POST", p, b ?? {}),
   put: (p, b) => request("PUT", p, b),
   patch: (p, b) => request("PATCH", p, b),
+  postText: (p, text, type = "text/csv") => request("POST", p, text, type),
 };
