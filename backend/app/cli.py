@@ -5,6 +5,8 @@ Command line entry points.
     python -m app.cli seed --reset          wipe and load demo data (simulated ads)
     python -m app.cli run-loop [--dry-run] [--as-of YYYY-MM-DD]
                                             one sense-think-act cycle (cron this daily)
+    python -m app.cli sync-booksy           pull Booksy appointments (needs BOOKSY_API_* env)
+    python -m app.cli import-booksy FILE    import a Booksy appointments CSV export
 """
 
 import argparse
@@ -33,6 +35,9 @@ def main(argv=None) -> None:
     p_loop = sub.add_parser("run-loop")
     p_loop.add_argument("--dry-run", action="store_true")
     p_loop.add_argument("--as-of", type=date.fromisoformat)
+    sub.add_parser("sync-booksy")
+    p_imp = sub.add_parser("import-booksy")
+    p_imp.add_argument("file")
     args = parser.parse_args(argv)
     settings = get_settings()
 
@@ -51,6 +56,16 @@ def main(argv=None) -> None:
             result = run_cycle(db, get_platform(db, settings), settings, as_of=args.as_of, dry_run=args.dry_run)
             print(json.dumps(_jsonable({"run_id": result["run_id"], "think": result["think"]["decisions"],
                                         "act": result["act"]}), indent=2))
+    elif args.cmd == "sync-booksy":
+        from .booksy import sync_booksy_if_configured
+        with session() as db:
+            result = sync_booksy_if_configured(db, settings)
+        print(json.dumps(result, indent=2, default=str) if result else "Booksy API not configured (BOOKSY_API_URL/TOKEN/BUSINESS_ID)")
+    elif args.cmd == "import-booksy":
+        from zoneinfo import ZoneInfo
+        from .booksy import import_csv
+        with open(args.file, encoding="utf-8-sig") as fh, session() as db:
+            print(json.dumps(import_csv(db, fh.read(), ZoneInfo(settings.shop_timezone)), indent=2, default=str))
     else:
         print("schema ready")
 
